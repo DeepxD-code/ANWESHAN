@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SENIOR
+  FAMILY
+  OFFICER
+  ADMIN
+}
+
+enum ComplaintStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  REJECTED
+}
+
+enum CaseStatus {
+  OPEN
+  UNDER_REVIEW
+  CLOSED
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  RESOLVED
+}
+
+enum EvidenceType {
+  IMAGE
+  VIDEO
+  AUDIO
+  PDF
+  LINK
+  DOCUMENT
+}
+
+model User {
+  id       String @id @default(cuid())
+  fullName String
+  email    String @unique
+  phone    String @unique
+  password String
+
+  age     Int?
+  gender  String?
+  city    String?
+  address String?
+
+  role UserRole
+
+  isVerified Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaints      Complaint[]
+  evidence        Evidence[]
+  emergencies     Emergency[]
+  healthRecords   HealthRecord[]
+  notifications   Notification[]
+  seniorLinks     GuardianLink[] @relation("seniorGuardian")
+  guardianLinks   GuardianLink[] @relation("guardianSenior")
+  alertSeniors    Alert[] @relation("alertSenior")
+  alertGuardians  Alert[] @relation("alertGuardian")
+}
+
+model Complaint {
+  id String @id @default(cuid())
+
+  complaintId String @unique
+
+  title       String
+  description String
+
+  category String
+
+  priority String
+
+  status ComplaintStatus @default(PENDING)
+
+  reportedLoss Float?
+
+  location String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  case Case?
+
+  evidence Evidence[]
+}
+
+model Case {
+  id String @id @default(cuid())
+
+  caseId String @unique
+
+  status CaseStatus @default(OPEN)
+
+  assignedTo String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  complaintId String @unique
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+}
+
+model Evidence {
+  id String @id @default(cuid())
+
+  fileName String
+
+  fileUrl String
+
+  fileType EvidenceType
+
+  fileSize String?
+
+  uploadedAt DateTime @default(now())
+
+  complaintId String
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Emergency {
+  id String @id @default(cuid())
+
+  emergencyId String @unique
+
+  type String
+
+  status EmergencyStatus @default(ACTIVE)
+
+  latitude Float?
+
+  longitude Float?
+
+  location String?
+
+  triggeredAt DateTime @default(now())
+
+  resolvedAt DateTime?
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model HealthRecord {
+  id String @id @default(cuid())
+
+  bloodGroup String?
+
+  bloodPressure String?
+
+  heartRate Int?
+
+  oxygenLevel Float?
+
+  bloodSugar Float?
+
+  allergies String?
+
+  medicalConditions String?
+
+  doctorName String?
+
+  emergencyContact String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model CommunityAlert {
+  id String @id @default(cuid())
+
+  title String
+
+  description String
+
+  category String
+
+  severity String
+
+  area String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  title String
+
+  message String
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model GuardianLink {
+  id        String @id @default(cuid())
+  seniorId  String
+  guardianId String
+  relation  String
+  createdAt DateTime @default(now())
+
+  senior   User @relation("seniorGuardian", fields: [seniorId], references: [id])
+  guardian User @relation("guardianSenior", fields: [guardianId], references: [id])
+
+  @@unique([seniorId, guardianId])
+}
+
+model Alert {
+  id        String @id @default(cuid())
+  type      String
+  status    String @default("pending")
+  duress    Boolean @default(false)
+  severity  String @default("medium")
+
+  latitude  Float?
+  longitude Float?
+  location  String?
+
+  seniorId   String
+  senior     User @relation("alertSenior", fields: [seniorId], references: [id])
+  guardianId String?
+  guardian   User? @relation("alertGuardian", fields: [guardianId], references: [id])
+
+  classification String?
+  conversation   String?
+
+  conversations Conversation[] @relation("alertConversations")
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
+}
+
+model Conversation {
+  id        String @id @default(cuid())
+  alertId   String
+  alert     Alert @relation("alertConversations", fields: [alertId], references: [id])
+  channel   String
+  from      String
+  to        String
+  body      String
+  direction String
+  createdAt DateTime @default(now())
+}
