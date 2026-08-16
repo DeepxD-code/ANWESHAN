@@ -10,6 +10,7 @@ import alertRoutes from "./routes/alert.routes";
 import guardianRoutes from "./routes/guardian.routes";
 import mlRoutes from "./routes/ml.routes";
 import twilioRoutes from "./routes/twilio.routes";
+import communityRoutes from "./routes/community.routes";
 
 const app = express();
 
@@ -31,5 +32,6 @@ app.use("/api/alerts", alertRoutes);
 app.use("/api/guardians", guardianRoutes);
 app.use("/api/ml", mlRoutes);
 app.use("/api/twilio", twilioRoutes);
+app.use("/api/community", communityRoutes);
 
 export default app; 

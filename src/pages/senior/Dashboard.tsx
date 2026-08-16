@@ -18,7 +18,7 @@ const Dashboard = () => {
     },
     {
       title: t("senior.dashboard.communityAlerts"),
-      path: "/senior/community-alerts",
+      path: "/senior/community",
       color: "bg-green-600"
     }
   ];

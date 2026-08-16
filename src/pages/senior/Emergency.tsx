@@ -40,13 +40,54 @@ const Emergency = () => {
     setSosLoading(true);
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
+      
+      // Request device location
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+      let location = "Location not available";
+      
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 5000,
+              maximumAge: 0,
+              enableHighAccuracy: true,
+            });
+          });
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+          location = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          
+          // Reverse geocode to get human-readable address (fallback)
+          try {
+            const geocodeRes = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const geoData = await geocodeRes.json();
+            if (geoData.address) {
+              location = geoData.address.city || geoData.address.state || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            }
+          } catch (geocodeErr) {
+            console.warn("Geocoding failed, using coordinates:", geocodeErr);
+          }
+        } catch (geoErr) {
+          console.warn("Geolocation access denied or unavailable:", geoErr);
+          location = "Location access denied - using emergency fallback";
+        }
+      } else {
+        console.warn("Geolocation API not available in this browser");
+      }
+      
       await fetch(`${API_BASE}/alerts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "sos",
           seniorId: user.id || "demo-senior",
-          location: "Ahmedabad, Gujarat",
+          latitude,
+          longitude,
+          location,
           duress: false,
         }),
       });

@@ -70,6 +70,8 @@ model User {
   guardianLinks   GuardianLink[] @relation("guardianSenior")
   alertSeniors    Alert[] @relation("alertSenior")
   alertGuardians  Alert[] @relation("alertGuardian")
+  threads         CommunityThread[] @relation("threadAuthor")
+  posts           CommunityPost[] @relation("postAuthor")
 }
 
 model Complaint {
@@ -214,6 +216,70 @@ model CommunityAlert {
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
+}
+
+model CommunityThread {
+  id String @id @default(cuid())
+
+  title String
+
+  description String
+
+  category String @default("general")
+
+  scamType String
+
+  severity String @default("medium")
+
+  area String?
+
+  authorId String
+
+  author User @relation("threadAuthor", fields: [authorId], references: [id])
+
+  isLocked Boolean @default(false)
+
+  isVerified Boolean @default(false)
+
+  viewCount Int @default(0)
+
+  replyCount Int @default(0)
+
+  posts CommunityPost[] @relation("threadPosts")
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model CommunityPost {
+  id String @id @default(cuid())
+
+  content String
+
+  authorId String
+
+  author User @relation("postAuthor", fields: [authorId], references: [id])
+
+  threadId String
+
+  thread CommunityThread @relation("threadPosts", fields: [threadId], references: [id], onDelete: Cascade)
+
+  parentPostId String?
+
+  parentPost CommunityPost? @relation("postReplies", fields: [parentPostId], references: [id], onDelete: Cascade)
+
+  replies CommunityPost[] @relation("postReplies")
+
+  likeCount Int @default(0)
+
+  isModerated Boolean @default(false)
+
+  isHelpful Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
 }
 
 model Notification {

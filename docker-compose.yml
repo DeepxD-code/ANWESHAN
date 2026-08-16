@@ -10,7 +10,7 @@ services:
       - PORT=5000
       - DATABASE_URL=file:./prisma/anweshan.db
       - JWT_SECRET=anweshan-dev-secret-key-2026
-      - CORS_ORIGIN=http://localhost:8080,http://frontend
+      - CORS_ORIGIN=http://localhost:${FRONTEND_PORT:-8080},http://frontend
       - TWILIO_ACCOUNT_SID=AC9732d02a2ee74854cfcb05a66db552fe
       - TWILIO_AUTH_TOKEN=93a04bbb29a31314d93937fdf49dd7b6
       - TWILIO_PHONE_NUMBER=+19704504410
@@ -23,7 +23,7 @@ services:
       dockerfile: Dockerfile
     container_name: anweshan-frontend
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       - backend
     restart: unless-stopped

@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useDailyCheckIn } from "@/hooks/use-daily-checkin";
 
 import {
   HeartPulse,
@@ -8,34 +9,83 @@ import {
   CalendarDays,
   Watch,
   Stethoscope,
+  Bell,
+  CheckCircle2,
+  Clock,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 const Health = () => {
   const { t } = useLanguage();
+  const { reminders, nextReminder, completeReminder, skipReminder, removeReminder } = useDailyCheckIn();
+  const [showNotification, setShowNotification] = useState(false);
 
-  const reminders = [
-    {
-      title: "Blood Pressure Medicine",
-      time: "08:00 AM",
-      status: "Completed",
-    },
-    {
-      title: "Evening Walk",
-      time: "06:30 PM",
-      status: "Pending",
-    },
-    {
-      title: "Doctor Appointment",
-      time: "15 Jul 2026",
-      status: "Upcoming",
-    },
-  ];
+  // Show notification when reminder is due
+  useEffect(() => {
+    if (nextReminder) {
+      setShowNotification(true);
+      // Auto-hide notification after 10 seconds, but keep reminding
+      const timer = setTimeout(() => setShowNotification(false), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [nextReminder]);
+
+  const handleCompleteReminder = (reminderId: string) => {
+    completeReminder(reminderId);
+    setShowNotification(false);
+  };
+
+  const handleSkipReminder = (reminderId: string) => {
+    skipReminder(reminderId);
+    setShowNotification(false);
+  };
+
+  // Get status counts
+  const completedCount = reminders.filter(r => r.isCompleted).length;
+  const pendingCount = reminders.filter(r => !r.isCompleted).length;
 
   return (
 
     <div className="min-h-screen bg-background p-6">
+
+      {/* Notification Banner for Due Reminders */}
+      {showNotification && nextReminder && (
+        <div className="fixed top-4 right-4 z-50 w-full max-w-md bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl p-6 shadow-2xl animate-in slide-in-from-top">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Bell className="h-6 w-6 animate-bounce" />
+              <div>
+                <h3 className="font-bold text-lg">{nextReminder.title}</h3>
+                <p className="text-sm opacity-90">{nextReminder.scheduledTime}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowNotification(false)}
+              className="text-white/80 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => handleCompleteReminder(nextReminder.id)}
+              className="flex-1 bg-white text-blue-600 hover:bg-white/90 font-semibold"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Mark Complete
+            </Button>
+            <Button
+              onClick={() => handleSkipReminder(nextReminder.id)}
+              variant="outline"
+              className="flex-1 bg-white/20 border-white/30 text-white hover:bg-white/30"
+            >
+              Skip
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
 
@@ -81,8 +131,8 @@ const Health = () => {
             {t("senior.health.dailyCheckin")}
           </p>
 
-          <h2 className="text-3xl font-bold">
-            {t("senior.health.completed")}
+          <h2 className="text-3xl font-bold text-green-600">
+            {completedCount}/{reminders.length}
           </h2>
 
         </div>
@@ -193,46 +243,60 @@ const Health = () => {
 
           </div>
 
-          <div className="space-y-4"></div>
-          {reminders.map((item, index) => (
+          <div className="space-y-4">
+          {reminders.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No reminders set. Add daily check-ins to stay healthy!</p>
+          ) : (
+            reminders.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between border rounded-xl p-4 hover:bg-muted/30 transition-colors"
+              >
 
-<div
-  key={index}
-  className="flex items-center justify-between border rounded-xl p-4"
->
+                <div className="flex-1">
 
-  <div>
+                  <h3 className="font-semibold">
+                    {item.title}
+                  </h3>
 
-    <h3 className="font-semibold">
-      {item.title}
-    </h3>
+                  <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                    <Clock className="h-3 w-3" />
+                    {item.scheduledTime}
+                  </p>
 
-    <p className="text-sm text-muted-foreground">
-      {item.time}
-    </p>
+                </div>
 
-  </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-medium
+                    ${
+                      item.isCompleted
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                    }`}
+                  >
+                    {item.isCompleted ? "Done" : "Due"}
+                  </span>
+                  {!item.isCompleted && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleCompleteReminder(item.id)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </Button>
+                  )}
+                </div>
 
-  <span
-    className={`px-3 py-1 rounded-full text-sm font-medium
-    ${
-      item.status === "Completed"
-        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-        : item.status === "Pending"
-        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-    }`}
-  >
-    {item.status}
-  </span>
+              </div>
+            ))
+          )}
+          </div>
 
-</div>
+        </div>
 
-))}
-
-</div>
-
-</div>
+      </div>
 
 
 
