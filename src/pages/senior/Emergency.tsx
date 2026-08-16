@@ -18,6 +18,11 @@ import {
 
 import { Button } from "@/components/ui/button";
 
+const SOS_TRIGGER_WORDS = ["help", "emergency", "police", "sos", "save me", "bachao", "mushkil"] as const;
+
+const findSosTrigger = (text: string) =>
+  SOS_TRIGGER_WORDS.find((word) => text.includes(word));
+
 const Emergency = () => {
   const { t } = useLanguage();
 
@@ -35,8 +40,11 @@ const Emergency = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const sosTriggeredRef = useRef(false);
 
-  const triggerSos = async () => {
+  const triggerSos = async (triggerWord?: string) => {
+    if (sosTriggeredRef.current) return;
+    sosTriggeredRef.current = true;
     setSosLoading(true);
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -89,6 +97,10 @@ const Emergency = () => {
           longitude,
           location,
           duress: false,
+          classification: triggerWord ? "voice_trigger" : "button",
+          conversation: triggerWord
+            ? `Voice SOS trigger detected: "${triggerWord}"`
+            : "SOS activated using the emergency button",
         }),
       });
       setSosActivated(true);
@@ -158,7 +170,7 @@ const Emergency = () => {
       // Simulate trigger word detection after 4 seconds
       setTimeout(() => {
         setTranscript("Detected: 'HELP! EMERGENCY!'");
-        triggerSos();
+        triggerSos("help");
         stopListening();
         alert("Voice Trigger detected! SOS has been activated automatically.");
       }, 4000);
@@ -175,7 +187,7 @@ const Emergency = () => {
       
       setTimeout(() => {
         setTranscript("Detected: 'HELP! EMERGENCY!'");
-        triggerSos();
+        triggerSos("help");
         stopListening();
         alert("Voice Trigger detected! SOS has been activated automatically.");
       }, 4000);
@@ -217,11 +229,11 @@ const Emergency = () => {
       setTranscript(currentText);
 
       // Check for SOS triggers
-      const triggers = ["help", "emergency", "police", "sos", "save me", "bachao", "mushkil"];
-      if (triggers.some(word => currentText.includes(word))) {
-        triggerSos();
+      const matchedTrigger = findSosTrigger(currentText);
+      if (matchedTrigger) {
+        triggerSos(matchedTrigger);
         stopListening();
-        alert("Voice Trigger detected! SOS has been activated automatically.");
+        alert(`Voice trigger detected: "${matchedTrigger}". SOS has been activated automatically.`);
       }
     };
 
@@ -399,7 +411,12 @@ const Emergency = () => {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground text-center mt-3">
-                Say <strong className="text-foreground">"HELP"</strong> or <strong className="text-foreground">"EMERGENCY"</strong> to trigger SOS automatically.
+            Say any trigger word to activate SOS automatically: {SOS_TRIGGER_WORDS.map((word, index) => (
+              <React.Fragment key={word}>
+                {index > 0 && ", "}
+                <strong className="text-foreground">"{word.toUpperCase()}"</strong>
+              </React.Fragment>
+            ))}.
               </p>
             </div>
           )}

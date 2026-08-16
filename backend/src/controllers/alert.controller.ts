@@ -4,9 +4,9 @@ import { notifyGuardians, isTwilioConfigured } from "../services/twilio.service"
 
 export const createAlert = async (req: Request, res: Response) => {
   try {
-    const { type, seniorId, latitude, longitude, location, duress, conversation } = req.body;
+    const { type, seniorId, latitude, longitude, location, duress, conversation, classification } = req.body;
     const alert = await prisma.alert.create({
-      data: { type, seniorId, latitude, longitude, location, duress: duress || false, severity: type === "sos" ? "critical" : "medium" },
+      data: { type, seniorId, latitude, longitude, location, duress: duress || false, severity: type === "sos" ? "critical" : "medium", classification: classification || null, conversation: conversation || null },
     });
     const senior = await prisma.user.findUnique({ where: { id: seniorId } });
     const seniorName = senior?.fullName || "your senior";
