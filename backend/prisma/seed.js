@@ -3,9 +3,6 @@ const bcrypt = require("bcrypt");
 const prisma = new PrismaClient();
 
 async function main() {
-  const existing = await prisma.user.findUnique({ where: { email: "ramesh@example.com" } });
-  if (existing) { console.log("Already seeded"); return; }
-
   const hash = await bcrypt.hash("password123", 10);
   const senior = await prisma.user.upsert({
     where: { email: "ramesh@example.com" }, update: {},
@@ -18,6 +15,10 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "officer@example.com" }, update: {},
     create: { fullName: "Inspector Rahul Mehta", email: "officer@example.com", phone: "9876543212", password: hash, age: 38, gender: "Male", city: "Ahmedabad", address: "Cyber Crime Branch", role: "OFFICER" },
+  });
+  await prisma.user.upsert({
+    where: { email: "admin@example.com" }, update: {},
+    create: { fullName: "ANWESHAN Administrator", email: "admin@example.com", phone: "9876543213", password: hash, age: 35, city: "Ahmedabad", address: "ANWESHAN Control Center", role: "ADMIN" },
   });
   await prisma.guardianLink.upsert({
     where: { seniorId_guardianId: { seniorId: senior.id, guardianId: guardian.id } }, update: {},

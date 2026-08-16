@@ -36,6 +36,16 @@ async function main() {
     },
   });
 
+  await prisma.user.upsert({
+    where: { email: "admin@example.com" },
+    update: {},
+    create: {
+      fullName: "ANWESHAN Administrator", email: "admin@example.com", phone: "9876543213",
+      password: hash, age: 35, city: "Ahmedabad",
+      address: "ANWESHAN Control Center", role: "ADMIN",
+    },
+  });
+
   await prisma.guardianLink.upsert({
     where: { seniorId_guardianId: { seniorId: senior.id, guardianId: guardian.id } },
     update: {},
