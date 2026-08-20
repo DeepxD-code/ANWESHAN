@@ -152,7 +152,7 @@ Upload → auto-category + confidence score → caretaker review (approve/reject
 - **Blocked**: Twilio TRIAL account rejects unverified recipient numbers — user must verify at `twilio.com/user/account/phone-numbers/verified` or upgrade
 
 **Twilio creds** (in `backend/.env`):
-- SID: `AC9732d02a2ee74854cfcb05a66db552fe`
+- SID: `[REDACTED — see backend/.env]`
 - Token: `[REDACTED — rotated 2026, see backend/.env]`
 - From: `+19704504410`
 
@@ -209,9 +209,9 @@ tailscale funnel reset; tailscale funnel --bg 8080
 
 **Root `.env`** (for Docker Compose — gitignored):
 ```
-JWT_SECRET=anweshan-dev-secret-key-2026
-TWILIO_ACCOUNT_SID=AC9732d02a2ee74854cfcb05a66db552fe
-TWILIO_AUTH_TOKEN=<REDACTED — get from https://www.twilio.com/console>
+JWT_SECRET=<REDACTED — see backend/.env>
+TWILIO_ACCOUNT_SID=<REDACTED — see backend/.env>
+TWILIO_AUTH_TOKEN=<REDACTED — see backend/.env>
 TWILIO_PHONE_NUMBER=+19704504410
 ```
 
@@ -219,9 +219,9 @@ TWILIO_PHONE_NUMBER=+19704504410
 ```
 PORT=5000
 DATABASE_URL=file:./prisma/anweshan.db
-JWT_SECRET=anweshan-dev-secret-key-2026
-TWILIO_ACCOUNT_SID=AC9732d02a2ee74854cfcb05a66db552fe
-TWILIO_AUTH_TOKEN=<REDACTED — get from https://www.twilio.com/console>
+JWT_SECRET=<REDACTED — local dev only>
+TWILIO_ACCOUNT_SID=<REDACTED — see Twilio console>
+TWILIO_AUTH_TOKEN=<REDACTED — see Twilio console>
 TWILIO_PHONE_NUMBER=+19704504410
 PUBLIC_URL=https://deep.tail0fa17c.ts.net
 ```

@@ -55,7 +55,7 @@ The frontend starts on **http://localhost:8080**.
 | ------------------- | ---------------------------- | -------------------------------------------------- |
 | `PORT`              | Backend server port          | `5000`                                             |
 | `DATABASE_URL`      | PostgreSQL connection string | `postgresql://localhost:5432/anweshan`              |
-| `JWT_SECRET`        | Secret for JWT tokens        | `anweshan-dev-secret-key-2026`                     |
+| `JWT_SECRET`        | Secret for JWT tokens        | Set in `backend/.env`                              |
 | `TWILIO_ACCOUNT_SID`| Twilio account SID           | Configured for SMS alerts                          |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token            | Configured for SMS alerts                          |
 | `TWILIO_PHONE_NUMBER`| Twilio phone number         | `+19704504410`                                     |
