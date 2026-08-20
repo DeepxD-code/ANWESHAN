@@ -8,7 +8,7 @@ Developed as a prototype for the **AI Impact Summit 2026 – iSAFE Hackathon** (
 
 ---
 
-Deployed URL : anweshan.vercel.app
+Deployed URL : https://anweshan.vercel.app
 
 ## Problem Statement
 
