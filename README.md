@@ -8,6 +8,8 @@ Developed as a prototype for the **AI Impact Summit 2026 – iSAFE Hackathon** (
 
 ---
 
+Deployed URL : anweshan.vercel.app
+
 ## Problem Statement
 
 Senior citizens are increasingly targeted by:
@@ -282,4 +284,5 @@ npm run dev
 
 Team ANWESHAN
 
-AI Impact Summit 2026 — Track 2: Defend the Digital Citizen
+Dharmik Pandya | Avradeep Majumdar
+
