@@ -1,31 +1,18 @@
 import { Router } from "express";
 import {
-  createThread,
-  getThreads,
-  getThreadById,
-  addPost,
-  getThreadPosts,
-  markPostHelpful,
-  likePost,
-  getScamCategories,
-  searchThreads,
+  getChannels,
+  getPosts,
+  createPost,
+  addReply,
+  getRegionalStats,
 } from "../controllers/community.controller";
 
 const router = Router();
 
-// Thread endpoints
-router.post("/threads", createThread);
-router.get("/threads", getThreads);
-router.get("/threads/search", searchThreads);
-router.get("/threads/:id", getThreadById);
-
-// Post endpoints
-router.post("/threads/:id/posts", addPost);
-router.get("/threads/:threadId/posts", getThreadPosts);
-router.put("/posts/:id/helpful", markPostHelpful);
-router.put("/posts/:id/like", likePost);
-
-// Categories
-router.get("/categories/scams", getScamCategories);
+router.get("/channels", getChannels);
+router.get("/posts/:channelId", getPosts);
+router.get("/stats/regional", getRegionalStats);
+router.post("/posts", createPost);
+router.post("/posts/:postId/replies", addReply);
 
 export default router;

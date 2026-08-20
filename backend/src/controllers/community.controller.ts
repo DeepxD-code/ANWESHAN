@@ -1,314 +1,112 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 
-const queryString = (value: unknown, fallback = "") => {
-  if (Array.isArray(value)) return String(value[0] ?? fallback);
-  return typeof value === "string" ? value : fallback;
-};
-
-// Create a new community thread
-export const createThread = async (req: Request, res: Response) => {
+export const getChannels = async (_req: Request, res: Response) => {
   try {
-    const { title, description, scamType, severity, area, authorId } = req.body;
-
-    if (!title || !scamType || !authorId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields: title, scamType, authorId",
-      });
-    }
-
-    const thread = await prisma.communityThread.create({
-      data: {
-        title,
-        description,
-        scamType,
-        severity: severity || "medium",
-        area,
-        authorId,
-        category: "scam-alert",
-      },
-      include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
-      },
+    const channels = await prisma.communityChannel.findMany({
+      orderBy: { createdAt: "asc" },
+      include: { _count: { select: { posts: true } } },
     });
-
-    res.status(201).json({ success: true, thread });
+    res.status(200).json({ success: true, channels });
   } catch (error) {
-    console.error("Error creating thread:", error);
-    res.status(500).json({ success: false, message: "Failed to create thread" });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
 
-// Get all community threads with pagination
-export const getThreads = async (req: Request, res: Response) => {
+export const getPosts = async (req: Request, res: Response) => {
   try {
-    const scamType = queryString(req.query.scamType);
-    const severity = queryString(req.query.severity);
-    const skip = queryString(req.query.skip, "0");
-    const take = queryString(req.query.take, "10");
-
-    const where: any = { isLocked: false };
-    if (scamType) where.scamType = scamType;
-    if (severity) where.severity = severity;
-
-    const threads = await prisma.communityThread.findMany({
-      where,
-      include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
-        posts: {
-          take: 1,
-          orderBy: { createdAt: "desc" },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: parseInt(skip as string),
-      take: parseInt(take as string),
-    });
-
-    const total = await prisma.communityThread.count({ where });
-
-    res.status(200).json({ success: true, threads, total, skip, take });
-  } catch (error) {
-    console.error("Error fetching threads:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch threads" });
-  }
-};
-
-// Get single thread with all posts
-export const getThreadById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-
-    // Increment view count
-    await prisma.communityThread.update({
-      where: { id },
-      data: { viewCount: { increment: 1 } },
-    });
-
-    const thread = await prisma.communityThread.findUnique({
-      where: { id },
-      include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
-        posts: {
-          include: {
-            author: {
-              select: { id: true, fullName: true, role: true },
-            },
-            replies: {
-              include: {
-                author: {
-                  select: { id: true, fullName: true, role: true },
-                },
-              },
-            },
-          },
-          where: { parentPostId: null },
-          orderBy: { createdAt: "desc" },
-        },
-      },
-    });
-
-    if (!thread) {
-      return res.status(404).json({ success: false, message: "Thread not found" });
-    }
-
-    res.status(200).json({ success: true, thread });
-  } catch (error) {
-    console.error("Error fetching thread:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch thread" });
-  }
-};
-
-// Add a post/reply to a thread
-export const addPost = async (req: Request, res: Response) => {
-  try {
-    const { threadId, content, authorId, parentPostId } = req.body;
-
-    if (!threadId || !content || !authorId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields: threadId, content, authorId",
-      });
-    }
-
-    const post = await prisma.communityPost.create({
-      data: {
-        content,
-        authorId,
-        threadId,
-        parentPostId: parentPostId || null,
-      },
-      include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
-      },
-    });
-
-    // Update thread's reply count
-    if (!parentPostId) {
-      await prisma.communityThread.update({
-        where: { id: threadId },
-        data: { replyCount: { increment: 1 } },
-      });
-    }
-
-    res.status(201).json({ success: true, post });
-  } catch (error) {
-    console.error("Error adding post:", error);
-    res.status(500).json({ success: false, message: "Failed to add post" });
-  }
-};
-
-// Get posts for a thread
-export const getThreadPosts = async (req: Request, res: Response) => {
-  try {
-    const { threadId } = req.params as { threadId: string };
-    const skip = queryString(req.query.skip, "0");
-    const take = queryString(req.query.take, "20");
-
+    const { channelId } = req.params as { channelId: string };
+    const where: any = channelId !== "all" ? { channelId } : {};
     const posts = await prisma.communityPost.findMany({
-      where: {
-        threadId,
-        parentPostId: null,
-      },
+      where,
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
+        user: { select: { id: true, fullName: true, role: true } },
         replies: {
-          include: {
-            author: {
-              select: { id: true, fullName: true, role: true },
-            },
-          },
+          include: { user: { select: { id: true, fullName: true } } },
           orderBy: { createdAt: "asc" },
         },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: parseInt(skip as string),
-      take: parseInt(take as string),
-    });
-
-    const total = await prisma.communityPost.count({
-      where: { threadId, parentPostId: null },
-    });
-
-    res.status(200).json({ success: true, posts, total, skip, take });
-  } catch (error) {
-    console.error("Error fetching posts:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch posts" });
-  }
-};
-
-// Mark post as helpful
-export const markPostHelpful = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-
-    const post = await prisma.communityPost.update({
-      where: { id },
-      data: { isHelpful: true },
-    });
-
-    res.status(200).json({ success: true, post });
-  } catch (error) {
-    console.error("Error marking post helpful:", error);
-    res.status(500).json({ success: false, message: "Failed to mark post" });
-  }
-};
-
-// Like/upvote a post
-export const likePost = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-
-    const post = await prisma.communityPost.update({
-      where: { id },
-      data: { likeCount: { increment: 1 } },
-    });
-
-    res.status(200).json({ success: true, post });
-  } catch (error) {
-    console.error("Error liking post:", error);
-    res.status(500).json({ success: false, message: "Failed to like post" });
-  }
-};
-
-// Get popular scam types/categories
-export const getScamCategories = async (_req: Request, res: Response) => {
-  try {
-    const categories = await prisma.communityThread.groupBy({
-      by: ["scamType"],
-      _count: {
-        id: true,
-      },
-      orderBy: {
-        _count: {
-          id: "desc",
-        },
+        _count: { select: { replies: true } },
       },
     });
-
-    res.status(200).json({ success: true, categories });
+    res.status(200).json({ success: true, posts });
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch categories" });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
 
-// Search threads
-export const searchThreads = async (req: Request, res: Response) => {
+export const createPost = async (req: Request, res: Response) => {
   try {
-    const query = queryString(req.query.query);
-    const skip = queryString(req.query.skip, "0");
-    const take = queryString(req.query.take, "10");
+    const { title, content, category, region, latitude, longitude, channelId, userId } = req.body;
+    if (!title || !content || !userId) {
+      return res.status(400).json({ success: false, message: "title, content and userId are required." });
+    }
+    const post = await prisma.communityPost.create({
+      data: {
+        title,
+        content,
+        category: category || "general",
+        region: region || null,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        channelId: channelId || null,
+        userId,
+      },
+    });
+    res.status(201).json({ success: true, post });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
 
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query is required",
-      });
+export const addReply = async (req: Request, res: Response) => {
+  try {
+    const { postId } = req.params as { postId: string };
+    const { content, userId } = req.body;
+    if (!content || !userId) {
+      return res.status(400).json({ success: false, message: "content and userId are required." });
+    }
+    const reply = await prisma.communityReply.create({
+      data: { content, userId, postId },
+      include: { user: { select: { id: true, fullName: true } } },
+    });
+    res.status(201).json({ success: true, reply });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+export const getRegionalStats = async (_req: Request, res: Response) => {
+  try {
+    const posts = await prisma.communityPost.findMany({
+      select: { category: true, region: true, latitude: true, longitude: true, createdAt: true },
+    });
+
+    const byRegion: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
+    const byDay: Record<string, number> = {};
+
+    for (const p of posts) {
+      const region = p.region || "Unknown";
+      byRegion[region] = (byRegion[region] || 0) + 1;
+      byCategory[p.category] = (byCategory[p.category] || 0) + 1;
+      const day = p.createdAt.toISOString().split("T")[0];
+      byDay[day] = (byDay[day] || 0) + 1;
     }
 
-    const threads = await prisma.communityThread.findMany({
-      where: {
-        OR: [
-          { title: { contains: query } },
-          { description: { contains: query } },
-          { scamType: { contains: query } },
-        ],
-      },
-      include: {
-        author: {
-          select: { id: true, fullName: true, role: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: parseInt(skip as string),
-      take: parseInt(take as string),
+    res.status(200).json({
+      success: true,
+      byRegion,
+      byCategory,
+      byDay,
+      total: posts.length,
     });
-
-    const total = await prisma.communityThread.count({
-      where: {
-        OR: [
-          { title: { contains: query } },
-          { description: { contains: query } },
-          { scamType: { contains: query } },
-        ],
-      },
-    });
-
-    res.status(200).json({ success: true, threads, total, query });
   } catch (error) {
-    console.error("Error searching threads:", error);
-    res.status(500).json({ success: false, message: "Failed to search threads" });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 };

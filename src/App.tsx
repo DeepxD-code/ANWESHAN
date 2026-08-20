@@ -38,6 +38,8 @@ import NotFound from "./pages/NotFound";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import SeniorRegister from "./pages/SeniorRegister";
+import CaretakerRegister from "./pages/CaretakerRegister";
 import RoleSelector from "./pages/RoleSelector";
 
 
@@ -56,6 +58,7 @@ import FamilyAlerts from "./pages/family/Alerts";
 import FamilySeniors from "./pages/family/Seniors";
 import FamilySettings from "./pages/family/Settings";
 import FamilyEscalations from "./pages/family/Escalations";
+import EvidenceReview from "./pages/family/EvidenceReview";
 
 
 /* ---------------- SENIOR ---------------- */
@@ -65,9 +68,8 @@ import SeniorEmergency from "./pages/senior/Emergency";
 import FraudCentre from "./pages/senior/FraudCentre";
 import HealthWelfare from "./pages/senior/HealthWelfare";
 import SeniorAlerts from "./pages/senior/CommunityAlerts";
-import CommunityChannel from "./pages/senior/CommunityChannel";
-import CommunityThreadDetail from "./pages/senior/CommunityThreadDetail";
 import SeniorSettings from "./pages/senior/Settings";
+import SeniorCommunity from "./pages/senior/Community";
 
 
 /* ---------------- OFFICER ---------------- */
@@ -78,7 +80,7 @@ import OfficerCases from "./pages/officer/Cases";
 import OfficerEvidence from "./pages/officer/Evidence";
 import EmergencyMonitor from "./pages/officer/EmergencyMonitor";
 import OfficerAnalytics from "./pages/officer/Analytics";
-import AlertsFrequencyDashboard from "./pages/officer/AlertsFrequencyDashboard";
+import WelfareMonitor from "./pages/officer/WelfareMonitor";
 
 
 /* ---------------- ADMIN ---------------- */
@@ -149,6 +151,8 @@ return (
 <Route path="/login" element={<Login />} />
 
 <Route path="/register" element={<Register />} />
+<Route path="/register/senior" element={<SeniorRegister />} />
+<Route path="/register/caretaker" element={<CaretakerRegister />} />
 
 <Route path="/role-selector" element={<RoleSelector />} />
 
@@ -195,6 +199,11 @@ element={<FamilySettings />}
 <Route
 path="escalations"
 element={<FamilyEscalations />}
+/>
+
+<Route
+path="evidence-review"
+element={<EvidenceReview />}
 />
 
 </Route>
@@ -248,15 +257,12 @@ path="community-alerts"
 element={<SeniorAlerts />}
 />
 
-<Route
-path="community"
-element={<CommunityChannel />}
-/>
 
 <Route
-path="community/:id"
-element={<CommunityThreadDetail />}
+path="community"
+element={<SeniorCommunity />}
 />
+
 
 <Route
 path="settings"
@@ -315,14 +321,16 @@ element={<EmergencyMonitor />}
 
 
 <Route
+path="welfare-monitor"
+element={<WelfareMonitor />}
+/>
+
+
+<Route
 path="analytics"
 element={<OfficerAnalytics />}
 />
 
-<Route
-path="alerts-frequency"
-element={<AlertsFrequencyDashboard />}
-/>
 
 </Route>
 

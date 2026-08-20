@@ -28,8 +28,8 @@ const OfficerPortal = () => {
       path: "/officer/emergency-monitor",
     },
     {
-      name: "Alerts & Frequency",
-      path: "/officer/alerts-frequency",
+      name: "Welfare Monitor",
+      path: "/officer/welfare-monitor",
     },
     {
       name: t("portal.officer.analytics"),

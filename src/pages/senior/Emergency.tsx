@@ -18,11 +18,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 
-const SOS_TRIGGER_WORDS = ["help", "emergency", "police", "sos", "save me", "bachao", "mushkil"] as const;
-
-const findSosTrigger = (text: string) =>
-  SOS_TRIGGER_WORDS.find((word) => text.includes(word));
-
 const Emergency = () => {
   const { t } = useLanguage();
 
@@ -40,67 +35,48 @@ const Emergency = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const sosTriggeredRef = useRef(false);
 
-  const triggerSos = async (triggerWord?: string) => {
-    if (sosTriggeredRef.current) return;
-    sosTriggeredRef.current = true;
-    setSosLoading(true);
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      
-      // Request device location
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-      let location = "Location not available";
-      
-      if (navigator.geolocation) {
-        try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 5000,
-              maximumAge: 0,
-              enableHighAccuracy: true,
-            });
-          });
-          latitude = position.coords.latitude;
-          longitude = position.coords.longitude;
-          location = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          
-          // Reverse geocode to get human-readable address (fallback)
-          try {
-            const geocodeRes = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-            );
-            const geoData = await geocodeRes.json();
-            if (geoData.address) {
-              location = geoData.address.city || geoData.address.state || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-            }
-          } catch (geocodeErr) {
-            console.warn("Geocoding failed, using coordinates:", geocodeErr);
-          }
-        } catch (geoErr) {
-          console.warn("Geolocation access denied or unavailable:", geoErr);
-          location = "Location access denied - using emergency fallback";
-        }
-      } else {
-        console.warn("Geolocation API not available in this browser");
+  // GPS location state
+  const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "locked">("idle");
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lon: number } | null>(null);
+
+  // Try to get the device location, fall back to geolocation API
+  const getCurrentLocation = async (): Promise<{ lat: number; lon: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
       }
-      
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    });
+  };
+
+  const triggerSos = async () => {
+    setSosLoading(true);
+    setGpsStatus("locating");
+    try {
+      const coords = await getCurrentLocation();
+      if (coords) {
+        setGpsCoords(coords);
+        setGpsStatus("locked");
+      } else {
+        setGpsStatus("idle");
+      }
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
       await fetch(`${API_BASE}/alerts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "sos",
           seniorId: user.id || "demo-senior",
-          latitude,
-          longitude,
-          location,
+          latitude: coords?.lat ?? null,
+          longitude: coords?.lon ?? null,
+          location: coords ? "Device GPS Location" : "Ahmedabad, Gujarat",
           duress: false,
-          classification: triggerWord ? "voice_trigger" : "button",
-          conversation: triggerWord
-            ? `Voice SOS trigger detected: "${triggerWord}"`
-            : "SOS activated using the emergency button",
         }),
       });
       setSosActivated(true);
@@ -170,7 +146,7 @@ const Emergency = () => {
       // Simulate trigger word detection after 4 seconds
       setTimeout(() => {
         setTranscript("Detected: 'HELP! EMERGENCY!'");
-        triggerSos("help");
+        triggerSos();
         stopListening();
         alert("Voice Trigger detected! SOS has been activated automatically.");
       }, 4000);
@@ -187,7 +163,7 @@ const Emergency = () => {
       
       setTimeout(() => {
         setTranscript("Detected: 'HELP! EMERGENCY!'");
-        triggerSos("help");
+        triggerSos();
         stopListening();
         alert("Voice Trigger detected! SOS has been activated automatically.");
       }, 4000);
@@ -229,11 +205,11 @@ const Emergency = () => {
       setTranscript(currentText);
 
       // Check for SOS triggers
-      const matchedTrigger = findSosTrigger(currentText);
-      if (matchedTrigger) {
-        triggerSos(matchedTrigger);
+      const triggers = ["help", "emergency", "police", "sos", "save me", "bachao", "mushkil"];
+      if (triggers.some(word => currentText.includes(word))) {
+        triggerSos();
         stopListening();
-        alert(`Voice trigger detected: "${matchedTrigger}". SOS has been activated automatically.`);
+        alert("Voice Trigger detected! SOS has been activated automatically.");
       }
     };
 
@@ -362,9 +338,24 @@ const Emergency = () => {
             {sosLoading ? t("senior.emergency.sending") : sosActivated ? t("senior.emergency.activated") : t("senior.emergency.sos")}
           </Button>
 
+          {/* GPS Status Indicator */}
+          {gpsStatus === "locating" && (
+            <div className="mt-4 p-3 border border-blue-200 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Capturing device GPS location for the alert message...
+            </div>
+          )}
+          {gpsStatus === "locked" && gpsCoords && (
+            <div className="mt-4 p-3 border border-green-200 rounded-lg bg-green-50 text-green-600 text-xs font-semibold flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              GPS locked: {gpsCoords.lat.toFixed(5)}, {gpsCoords.lon.toFixed(5)} — included in guardian SMS & call.
+            </div>
+          )}
+
           <p className="text-muted-foreground mt-6">
             Press once to immediately notify your registered family members,
-            emergency contacts and Cyber Crime authorities.
+            emergency contacts and Cyber Crime authorities. Device location is
+            appended to the SMS alert sent to your caretakers.
           </p>
         </div>
 
@@ -411,12 +402,7 @@ const Emergency = () => {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground text-center mt-3">
-            Say any trigger word to activate SOS automatically: {SOS_TRIGGER_WORDS.map((word, index) => (
-              <React.Fragment key={word}>
-                {index > 0 && ", "}
-                <strong className="text-foreground">"{word.toUpperCase()}"</strong>
-              </React.Fragment>
-            ))}.
+                Say <strong className="text-foreground">"HELP"</strong> or <strong className="text-foreground">"EMERGENCY"</strong> to trigger SOS automatically.
               </p>
             </div>
           )}

@@ -28,6 +28,10 @@ const SeniorPortal = () => {
       path: "/senior/community-alerts",
     },
     {
+      name: "Community Channel",
+      path: "/senior/community",
+    },
+    {
       name: t("portal.senior.settings"),
       path: "/senior/settings",
     },

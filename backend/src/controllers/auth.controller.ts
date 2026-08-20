@@ -1,16 +1,23 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 import prisma from "../config/prisma";
 
-export const register = async (
-  req: Request,
-  res: Response
-) => {
+function generateCaretakerToken(): string {
+  const prefix = "CT";
+  const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+  const suffix = crypto.randomBytes(2).toString("hex").toUpperCase();
+  return `${prefix}-${random}-${suffix}-${new Date().getFullYear()}`;
+}
 
+function generateDeviceId(): string {
+  return `device_${crypto.randomBytes(8).toString("hex")}`;
+}
+
+export const register = async (req: Request, res: Response) => {
   try {
-
     const {
       fullName,
       email,
@@ -21,185 +28,189 @@ export const register = async (
       city,
       address,
       role,
+      deviceId: providedDeviceId,
+      caretakerToken,
+      policeId,
     } = req.body;
 
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email },
-          { phone },
-        ],
-      },
-    });
-
-    if (existingUser) {
-
-      return res.status(400).json({
-        success: false,
-        message: "User already exists.",
-      });
-
+    if (role === "ADMIN") {
+      return res.status(403).json({ success: false, message: "Admin accounts cannot be created via registration." });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (role === "OFFICER") {
+      return res.status(403).json({ success: false, message: "Police officer accounts cannot be created via registration. Contact system administrator." });
+    }
 
-    const user = await prisma.user.create({
+    if (role === "FAMILY") {
+      if (!caretakerToken) {
+        return res.status(400).json({ success: false, message: "Caretaker token is required for family registration." });
+      }
 
-      data: {
+      const senior = await prisma.user.findUnique({
+        where: { caretakerToken },
+      });
 
-        fullName,
+      if (!senior) {
+        return res.status(404).json({ success: false, message: "Invalid or expired caretaker token." });
+      }
 
-        email,
+      if (senior.role !== "SENIOR") {
+        return res.status(400).json({ success: false, message: "Token does not belong to a senior citizen." });
+      }
 
-        phone,
+      const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email }, { phone }] },
+      });
 
-        password: hashedPassword,
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: "User already exists." });
+      }
 
-        age,
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await prisma.user.create({
+        data: {
+          fullName,
+          email,
+          phone,
+          password: hashedPassword,
+          age,
+          gender,
+          city,
+          address,
+          role: "FAMILY",
+        },
+      });
 
-        gender,
+      await prisma.guardianLink.create({
+        data: { seniorId: senior.id, guardianId: user.id, relation: "Family Member" },
+      });
 
-        city,
+      const token = jwt.sign(
+        { id: user.id, role: user.role },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "7d" }
+      );
 
-        address,
+      return res.status(201).json({
+        success: true,
+        message: "Caretaker registration successful. Linked to senior citizen.",
+        token,
+        user,
+      });
+    }
 
-        role,
+    if (role === "SENIOR") {
+      const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email }, { phone }] },
+      });
 
-      },
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: "User already exists." });
+      }
 
-    });
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const deviceId = providedDeviceId || generateDeviceId();
+      const token = generateCaretakerToken();
 
-    return res.status(201).json({
+      const user = await prisma.user.create({
+        data: {
+          fullName,
+          email,
+          phone,
+          password: hashedPassword,
+          age,
+          gender,
+          city,
+          address,
+          role: "SENIOR",
+          deviceId,
+          caretakerToken: token,
+        },
+      });
 
-      success: true,
+      const jwtToken = jwt.sign(
+        { id: user.id, role: user.role },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "7d" }
+      );
 
-      message: "Registration successful.",
+      return res.status(201).json({
+        success: true,
+        message: "Senior citizen registration successful. Share your caretaker token with family members.",
+        token: jwtToken,
+        user,
+        caretakerToken: token,
+      });
+    }
 
-      user,
-
-    });
-
-  }
-
-  catch (error) {
-
+    return res.status(400).json({ success: false, message: "Invalid role specified." });
+  } catch (error) {
     console.error(error);
-
-    return res.status(500).json({
-
-      success: false,
-
-      message: "Internal server error.",
-
-    });
-
+    return res.status(500).json({ success: false, message: "Internal server error." });
   }
-
 };
 
-
-
-export const login = async (
-
-  req: Request,
-
-  res: Response
-
-) => {
-
+export const login = async (req: Request, res: Response) => {
   try {
+    const { email, password, policeId } = req.body;
 
-    const {
-      email,
-      password,
-    } = req.body;
-
-    const user = await prisma.user.findUnique({
-
-      where: {
-        email,
-      },
-
-    });
-
-    if (!user) {
-
-      return res.status(404).json({
-
-        success: false,
-
-        message: "User not found.",
-
-      });
-
+    let user;
+    if (policeId) {
+      user = await prisma.user.findUnique({ where: { policeId } });
+      if (!user || user.role !== "OFFICER") {
+        return res.status(404).json({ success: false, message: "Invalid police ID." });
+      }
+    } else {
+      user = await prisma.user.findUnique({ where: { email } });
     }
 
-    const validPassword = await bcrypt.compare(
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
 
-      password,
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: "Account is deactivated. Contact administrator." });
+    }
 
-      user.password
-
-    );
+    let validPassword = false;
+    if (policeId) {
+      validPassword = await bcrypt.compare(password, user.password);
+    } else {
+      validPassword = await bcrypt.compare(password, user.password);
+    }
 
     if (!validPassword) {
-
-      return res.status(401).json({
-
-        success: false,
-
-        message: "Invalid credentials.",
-
-      });
-
+      return res.status(401).json({ success: false, message: "Invalid credentials." });
     }
 
     const token = jwt.sign(
-
-      {
-
-        id: user.id,
-
-        role: user.role,
-
-      },
-
+      { id: user.id, role: user.role },
       process.env.JWT_SECRET as string,
-
-      {
-
-        expiresIn: "7d",
-
-      }
-
+      { expiresIn: "7d" }
     );
 
     return res.status(200).json({
-
       success: true,
-
       token,
-
-      user,
-
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        city: user.city,
+        deviceId: user.deviceId,
+        caretakerToken: user.caretakerToken,
+        policeId: user.policeId,
+        badgeNumber: user.badgeNumber,
+        station: user.station,
+        rank: user.rank,
+      },
     });
-
-  }
-
-  catch (error) {
-
+  } catch (error) {
     console.error(error);
-
-    return res.status(500).json({
-
-      success: false,
-
-      message: "Internal server error.",
-
-    });
-
+    return res.status(500).json({ success: false, message: "Internal server error." });
   }
-
 };
 
 export const updateProfile = async (req: Request, res: Response) => {
@@ -211,6 +222,54 @@ export const updateProfile = async (req: Request, res: Response) => {
       select: { id: true, fullName: true, email: true, phone: true, role: true },
     });
     return res.status(200).json({ success: true, user });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+export const linkCaretaker = async (req: Request, res: Response) => {
+  try {
+    const { seniorId, caretakerToken } = req.body;
+    const user = req.body.user;
+
+    const senior = await prisma.user.findUnique({ where: { id: seniorId } });
+    if (!senior || senior.caretakerToken !== caretakerToken) {
+      return res.status(400).json({ success: false, message: "Invalid caretaker token." });
+    }
+
+    const existingLink = await prisma.guardianLink.findUnique({
+      where: { seniorId_guardianId: { seniorId, guardianId: user.id } },
+    });
+
+    if (existingLink) {
+      return res.status(400).json({ success: false, message: "Already linked to this senior citizen." });
+    }
+
+    const link = await prisma.guardianLink.create({
+      data: { seniorId, guardianId: user.id, relation: "Family Member" },
+    });
+
+    return res.status(201).json({ success: true, link });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+export const verifyCaretakerToken = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    const senior = await prisma.user.findUnique({ where: { caretakerToken: token } });
+
+    if (!senior || senior.role !== "SENIOR") {
+      return res.status(404).json({ success: false, message: "Invalid token." });
+    }
+
+    return res.status(200).json({
+      success: true,
+      senior: { id: senior.id, fullName: senior.fullName, city: senior.city },
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: "Internal server error." });

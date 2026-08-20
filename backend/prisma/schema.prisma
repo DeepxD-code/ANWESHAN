@@ -42,24 +42,35 @@ enum EvidenceType {
 }
 
 model User {
-  id       String @id @default(cuid())
-  fullName String
-  email    String @unique
-  phone    String @unique
-  password String
+  id           String  @id @default(cuid())
+  fullName     String
+  email        String  @unique
+  phone        String  @unique
+  password     String
 
-  age     Int?
-  gender  String?
-  city    String?
-  address String?
+  age          Int?
+  gender       String?
+  city         String?
+  address      String?
 
-  role UserRole
+  role         UserRole
 
-  isVerified Boolean @default(false)
-  isActive   Boolean @default(true)
+  isVerified   Boolean @default(false)
+  isActive     Boolean @default(true)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Device & Security
+  deviceId     String? @unique
+  caretakerToken String? @unique
+  lastCheckIn  DateTime?
+
+  // Police specific
+  policeId     String? @unique
+  badgeNumber  String?
+  station      String?
+  rank         String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   complaints      Complaint[]
   evidence        Evidence[]
@@ -70,8 +81,10 @@ model User {
   guardianLinks   GuardianLink[] @relation("guardianSenior")
   alertSeniors    Alert[] @relation("alertSenior")
   alertGuardians  Alert[] @relation("alertGuardian")
-  threads         CommunityThread[] @relation("threadAuthor")
-  posts           CommunityPost[] @relation("postAuthor")
+  checkIns        CheckIn[]
+  communityPosts  CommunityPost[]
+  communityReplies CommunityReply[]
+  evidenceReviews EvidenceReview[]
 }
 
 model Complaint {
@@ -137,13 +150,15 @@ model Evidence {
 
   uploadedAt DateTime @default(now())
 
-  complaintId String
+  complaintId String?
 
-  complaint Complaint @relation(fields: [complaintId], references: [id])
+  complaint Complaint? @relation(fields: [complaintId], references: [id])
 
   userId String
 
   user User @relation(fields: [userId], references: [id])
+
+  review EvidenceReview?
 }
 
 model Emergency {
@@ -218,70 +233,6 @@ model CommunityAlert {
   createdAt DateTime @default(now())
 }
 
-model CommunityThread {
-  id String @id @default(cuid())
-
-  title String
-
-  description String
-
-  category String @default("general")
-
-  scamType String
-
-  severity String @default("medium")
-
-  area String?
-
-  authorId String
-
-  author User @relation("threadAuthor", fields: [authorId], references: [id])
-
-  isLocked Boolean @default(false)
-
-  isVerified Boolean @default(false)
-
-  viewCount Int @default(0)
-
-  replyCount Int @default(0)
-
-  posts CommunityPost[] @relation("threadPosts")
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-}
-
-model CommunityPost {
-  id String @id @default(cuid())
-
-  content String
-
-  authorId String
-
-  author User @relation("postAuthor", fields: [authorId], references: [id])
-
-  threadId String
-
-  thread CommunityThread @relation("threadPosts", fields: [threadId], references: [id], onDelete: Cascade)
-
-  parentPostId String?
-
-  parentPost CommunityPost? @relation("postReplies", fields: [parentPostId], references: [id], onDelete: Cascade)
-
-  replies CommunityPost[] @relation("postReplies")
-
-  likeCount Int @default(0)
-
-  isModerated Boolean @default(false)
-
-  isHelpful Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-}
-
 model Notification {
   id String @id @default(cuid())
 
@@ -345,4 +296,79 @@ model Conversation {
   body      String
   direction String
   createdAt DateTime @default(now())
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  latitude  Float?
+  longitude Float?
+  location  String?
+  createdAt DateTime @default(now())
+}
+
+model CommunityChannel {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   @default("general")
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       CommunityPost[]
+}
+
+model CommunityPost {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String
+  region    String?
+  latitude  Float?
+  longitude Float?
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  channelId String?
+  channel   CommunityChannel? @relation(fields: [channelId], references: [id])
+  replies   CommunityReply[]
+}
+
+model CommunityReply {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id])
+}
+
+model EvidenceReview {
+  id           String   @id @default(cuid())
+  evidenceId   String   @unique
+  evidence     Evidence @relation(fields: [evidenceId], references: [id])
+  reviewedBy   String?
+  reviewer     User?    @relation(fields: [reviewedBy], references: [id])
+  status       String   @default("pending")
+  category     String?
+  aiCategory   String?
+  aiConfidence Float?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AnalyticsSnapshot {
+  id           String   @id @default(cuid())
+  type         String
+  region       String?
+  periodStart  DateTime
+  periodEnd    DateTime
+  data         Json
+  createdAt    DateTime @default(now())
 }

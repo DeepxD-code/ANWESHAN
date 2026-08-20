@@ -1,9 +1,42 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
+import API_BASE from "@/lib/api";
+import { Loader2, CheckCircle2 } from "lucide-react";
 
 const HealthWelfare = () => {
   const { t } = useLanguage();
+
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkInDone, setCheckInDone] = useState(false);
+  const [checkInError, setCheckInError] = useState("");
+
+  const doCheckIn = async () => {
+    setCheckingIn(true);
+    setCheckInError("");
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const response = await fetch(`${API_BASE}/checkins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id || "demo-senior",
+          location: "Ahmedabad, Gujarat",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setCheckInError(data.message || "Check-in failed.");
+        return;
+      }
+      setCheckInDone(true);
+    } catch (err) {
+      console.error(err);
+      setCheckInError("Unable to connect to server.");
+    } finally {
+      setCheckingIn(false);
+    }
+  };
 
   return (
 
@@ -408,9 +441,25 @@ AI Wellness Recommendations
 
 <div className="flex flex-wrap gap-4 mt-8">
 
-<Button>
-Complete Daily Check-in
+<Button onClick={doCheckIn} disabled={checkingIn}>
+{checkingIn ? (
+  <>
+    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    Checking in...
+  </>
+) : checkInDone ? (
+  <>
+    <CheckCircle2 className="mr-2 h-4 w-4" />
+    Checked In ✓
+  </>
+) : (
+  "Complete Daily Check-in"
+)}
 </Button>
+
+{checkInError && (
+  <p className="text-red-500 text-sm w-full">{checkInError}</p>
+)}
 
 <Button variant="outline">
 {t("senior.health.updateProfile")}

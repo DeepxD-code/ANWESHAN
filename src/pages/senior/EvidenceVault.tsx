@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   FileText,
@@ -14,16 +14,18 @@ import {
   FolderOpen,
   HardDrive,
   Files,
-  CheckCircle2,
-  AlertCircle,
-  Lock,
-  Share2,
+  Sparkles,
+  X,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import API_BASE from "@/lib/api";
 
 type EvidenceType = "Image" | "PDF" | "Audio" | "URL";
-type EvidenceStatus = "Verified" | "Pending" | "Processing";
 
 interface Evidence {
   id: string;
@@ -33,107 +35,60 @@ interface Evidence {
   uploadedBy: string;
   uploadDate: string;
   size: string;
-  status: EvidenceStatus;
-  description: string;
-  tags: string[];
+  category?: string;
+  status?: string;
+}
+
+interface ReviewItem {
+  id: string;
+  status: string;
+  aiCategory: string;
+  category: string;
+  evidence: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    fileType: string;
+    uploadedAt: string;
+  };
 }
 
 const initialEvidence: Evidence[] = [
   {
     id: "EV-001",
-    title: "WhatsApp Screenshot - Fake Investment Offer",
+    title: "WhatsApp Screenshot",
     type: "Image",
     complaintId: "ANW-2026-00124",
     uploadedBy: "Ramesh Patel",
-    uploadDate: "10 Jul 2026 • 2:30 PM",
+    uploadDate: "10 Jul 2026",
     size: "1.4 MB",
-    status: "Verified",
-    description: "Screenshot showing conversation with scammer offering 50% returns on crypto investment",
-    tags: ["investment-scam", "whatsapp", "crypto"],
   },
   {
     id: "EV-002",
-    title: "Bank Transaction Receipt - Fraudulent Transfer",
+    title: "Transaction Receipt",
     type: "PDF",
     complaintId: "ANW-2026-00124",
     uploadedBy: "Ramesh Patel",
-    uploadDate: "10 Jul 2026 • 3:15 PM",
+    uploadDate: "10 Jul 2026",
     size: "820 KB",
-    status: "Verified",
-    description: "Receipt showing ₹50,000 transferred to fraudulent account before recovery",
-    tags: ["transaction", "bank-fraud", "loss-₹50k"],
   },
   {
     id: "EV-003",
-    title: "Fraud Call Recording - Digital Arrest Scam",
+    title: "Fraud Call Recording",
     type: "Audio",
     complaintId: "ANW-2026-00118",
     uploadedBy: "Ramesh Patel",
-    uploadDate: "08 Jul 2026 • 11:45 AM",
+    uploadDate: "08 Jul 2026",
     size: "5.1 MB",
-    status: "Verified",
-    description: "Audio recording of scammer impersonating law enforcement officer threatening arrest",
-    tags: ["phone-scam", "digital-arrest", "impersonation"],
   },
   {
     id: "EV-004",
-    title: "Suspicious Website - Fake UPI Payment Page",
+    title: "Suspicious Website",
     type: "URL",
     complaintId: "ANW-2026-00110",
     uploadedBy: "Ramesh Patel",
-    uploadDate: "06 Jul 2026 • 5:20 PM",
+    uploadDate: "06 Jul 2026",
     size: "--",
-    status: "Pending",
-    description: "Link to cloned UPI payment page used to steal credentials (flagged for takedown)",
-    tags: ["phishing", "upi-fraud", "website-clone"],
-  },
-  {
-    id: "EV-005",
-    title: "Email Thread - Prize Winning Scam",
-    type: "PDF",
-    complaintId: "ANW-2026-00105",
-    uploadedBy: "Ramesh Patel",
-    uploadDate: "05 Jul 2026 • 1:00 PM",
-    size: "650 KB",
-    status: "Verified",
-    description: "Email thread claiming the recipient won a lottery prize worth ₹10 lakhs",
-    tags: ["email-scam", "lottery-fraud", "impersonation"],
-  },
-  {
-    id: "EV-006",
-    title: "Telegram Group Screenshot - Fake Trading Group",
-    type: "Image",
-    complaintId: "ANW-2026-00103",
-    uploadedBy: "Ramesh Patel",
-    uploadDate: "03 Jul 2026 • 4:45 PM",
-    size: "2.8 MB",
-    status: "Processing",
-    description: "Screenshot from telegram group showing fake trading signals and pump-and-dump scheme",
-    tags: ["telegram", "trading-scam", "pump-and-dump"],
-  },
-  {
-    id: "EV-007",
-    title: "SMS Messages - OTP Phishing",
-    type: "Image",
-    complaintId: "ANW-2026-00098",
-    uploadedBy: "Ramesh Patel",
-    uploadDate: "01 Jul 2026 • 9:30 AM",
-    size: "1.2 MB",
-    status: "Verified",
-    description: "Screenshots of SMS messages impersonating bank and requesting OTP verification",
-    tags: ["sms-scam", "phishing", "otp-theft"],
-  },
-  {
-    id: "EV-008",
-    title: "Video Call Recording - Romance Scam Interview",
-    type: "Audio",
-    complaintId: "ANW-2026-00095",
-    uploadedBy: "Ramesh Patel",
-    uploadDate: "28 Jun 2026 • 7:15 PM",
-    size: "8.5 MB",
-    status: "Pending",
-    description: "Video call recording showing scammer using deepfake to establish trust relationship",
-    tags: ["romance-scam", "deepfake", "video-fraud"],
   },
 ];
 
@@ -141,392 +96,81 @@ const EvidenceVault = () => {
   const { t } = useLanguage();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [aiResult, setAiResult] = useState<{ category: string; label: string; confidence: number } | null>(null);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [liveEvidence, setLiveEvidence] = useState<Evidence[]>([]);
+
+  const [form, setForm] = useState({
+    fileName: "",
+    fileUrl: "",
+    fileType: "IMAGE" as string,
+    complaintId: "",
+    description: "",
+  });
+
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/evidence/review`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setReviews(data.reviews);
+      })
+      .catch(console.error);
+  }, []);
+
+  const handleUpload = async () => {
+    if (!form.fileName || !form.fileUrl) {
+      setUploadError("File name and file URL are required.");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    setAiResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/evidence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          userId: currentUser.id || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAiResult({ category: data.autoCategory.category, label: data.autoCategory.label, confidence: data.autoCategory.confidence });
+        setLiveEvidence((prev) => [
+          {
+            id: data.evidence.id,
+            title: form.fileName,
+            type: form.fileType === "IMAGE" ? "Image" : form.fileType === "VIDEO" ? "Image" : form.fileType === "AUDIO" ? "Audio" : "PDF",
+            complaintId: form.complaintId || "ANW-2026-PENDING",
+            uploadedBy: currentUser.fullName || "You",
+            uploadDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+            size: "--",
+            category: data.autoCategory.label,
+            status: "pending",
+          },
+          ...prev,
+        ]);
+        setForm({ fileName: "", fileUrl: "", fileType: "IMAGE", complaintId: "", description: "" });
+      } else {
+        setUploadError(data.message || "Upload failed.");
+      }
+    } catch (err) {
+      console.error(err);
+      setUploadError("Network error — is the backend running?");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const evidence = useMemo(() => {
-    return initialEvidence.filter((item) => {
-      const matchesSearch =
-        item.title.toLowerCase().includes(search.toLowerCase()) ||
-        item.complaintId.toLowerCase().includes(search.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()));
-
-      const matchesFilter = filter === "All" || item.type === filter;
-      const matchesStatusFilter = statusFilter === "All" || item.status === statusFilter;
-
-      return matchesSearch && matchesFilter && matchesStatusFilter;
-    });
-  }, [search, filter, statusFilter]);
-
-  const getIcon = (type: EvidenceType) => {
-    switch (type) {
-      case "Image":
-        return <Image className="h-6 w-6 text-blue-600" />;
-      case "PDF":
-        return <FileText className="h-6 w-6 text-red-600" />;
-      case "Audio":
-        return <FileAudio className="h-6 w-6 text-green-600" />;
-      case "URL":
-        return <Link2 className="h-6 w-6 text-orange-600" />;
-    }
-  };
-
-  const getStatusColor = (status: EvidenceStatus) => {
-    switch (status) {
-      case "Verified":
-        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-      case "Pending":
-        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
-      case "Processing":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-    }
-  };
-
-  const getStatusIcon = (status: EvidenceStatus) => {
-    switch (status) {
-      case "Verified":
-        return <CheckCircle2 className="h-4 w-4" />;
-      case "Pending":
-        return <AlertCircle className="h-4 w-4" />;
-      case "Processing":
-        return <Lock className="h-4 w-4" />;
-    }
-  };
-
-  const totalSize = initialEvidence.reduce((acc, item) => {
-    const sizeNum = parseFloat(item.size);
-    return acc + (isNaN(sizeNum) ? 0 : sizeNum);
-  }, 0);
-
-  return (
-    <div className="min-h-screen bg-background">
-
-      <div className="max-w-7xl mx-auto p-6 lg:p-10">
-
-        {/* Header */}
-
-        <div className="bg-gradient-to-r from-blue-600/10 to-primary/10 border border-primary/20 rounded-3xl p-8 mb-8">
-
-          <div className="flex flex-col lg:flex-row justify-between gap-6">
-
-            <div className="flex items-center gap-5">
-
-              <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
-
-                <ShieldCheck className="h-8 w-8 text-primary" />
-
-              </div>
-
-              <div>
-
-                <h1 className="text-4xl font-bold">
-                  {t("senior.evidence.title")}
-                </h1>
-
-                <p className="text-muted-foreground mt-2">
-                  Securely store and manage evidence for investigations with encryption and access control
-                </p>
-
-              </div>
-
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline">
-                <Share2 className="mr-2 h-5 w-5" />
-                Share
-              </Button>
-              <Button className="h-12 px-8 bg-primary hover:bg-primary/90">
-
-                <Upload className="mr-2 h-5 w-5" />
-
-                {t("senior.evidence.upload")}
-
-              </Button>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* Stats */}
-
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-
-          <div className="bg-card border rounded-2xl p-6 hover:shadow-lg transition-shadow">
-
-            <FolderOpen className="h-8 w-8 text-blue-600 mb-4" />
-
-            <p className="text-muted-foreground">
-              {t("senior.evidence.totalFiles")}
-            </p>
-
-            <h2 className="text-4xl font-bold mt-2">
-              {initialEvidence.length}
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-2">{evidence.length} matching filters</p>
-
-          </div>
-
-          <div className="bg-card border rounded-2xl p-6 hover:shadow-lg transition-shadow">
-
-            <HardDrive className="h-8 w-8 text-green-600 mb-4" />
-
-            <p className="text-muted-foreground">
-              {t("senior.evidence.storageUsed")}
-            </p>
-
-            <h2 className="text-4xl font-bold mt-2">
-              {totalSize.toFixed(1)} MB
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-2">of 500 MB quota</p>
-
-          </div>
-
-          <div className="bg-card border rounded-2xl p-6 hover:shadow-lg transition-shadow">
-
-            <Files className="h-8 w-8 text-orange-600 mb-4" />
-
-            <p className="text-muted-foreground">
-              {t("senior.evidence.linkedCases")}
-            </p>
-
-            <h2 className="text-4xl font-bold mt-2">
-              {new Set(initialEvidence.map(e => e.complaintId)).size}
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-2">Active complaints</p>
-
-          </div>
-
-          <div className="bg-card border rounded-2xl p-6 hover:shadow-lg transition-shadow">
-
-            <CheckCircle2 className="h-8 w-8 text-green-600 mb-4" />
-
-            <p className="text-muted-foreground">
-              Verification Status
-            </p>
-
-            <h2 className="text-4xl font-bold mt-2">
-              {initialEvidence.filter(e => e.status === "Verified").length}
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-2">files verified</p>
-
-          </div>
-
-        </div>
-
-        {/* Search & Filters */}
-
-        <div className="bg-card border rounded-2xl p-6 mb-8">
-
-          <div className="grid lg:grid-cols-4 gap-4">
-
-            <div className="lg:col-span-2 relative">
-
-              <Search className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
-
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by title, complaint ID, or tag..."
-                className="w-full rounded-xl border bg-background pl-12 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-
-            </div>
-
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="rounded-xl border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option>All File Types</option>
-              <option>Image</option>
-              <option>PDF</option>
-              <option>Audio</option>
-              <option>URL</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-xl border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option>All Status</option>
-              <option>Verified</option>
-              <option>Pending</option>
-              <option>Processing</option>
-            </select>
-
-          </div>
-
-        </div>
-
-        {/* Evidence Grid */}
-
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {evidence.length > 0 ? (
-
-            evidence.map((item) => (
-
-              <div
-                key={item.id}
-                onClick={() => setSelectedEvidence(item.id)}
-                className="bg-card border rounded-2xl p-6 shadow-sm hover:shadow-lg hover:border-primary/50 transition-all cursor-pointer group"
-              >
-
-                <div className="flex items-center justify-between mb-4">
-
-                  <div className="flex items-center gap-3">
-
-                    {getIcon(item.type)}
-
-                    <div>
-
-                      <h3 className="font-semibold line-clamp-2 group-hover:text-primary transition">
-                        {item.title}
-                      </h3>
-
-                      <p className="text-xs text-muted-foreground">
-                        {item.type}
-                      </p>
-
-                    </div>
-
-                  </div>
-
-                  <div className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1 ${getStatusColor(item.status)}`}>
-                    {getStatusIcon(item.status)}
-                    {item.status}
-                  </div>
-
-                </div>
-
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {item.description}
-                </p>
-
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {item.tags.slice(0, 2).map((tag) => (
-                    <span key={tag} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">
-                      #{tag}
-                    </span>
-                  ))}
-                  {item.tags.length > 2 && (
-                    <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">
-                      +{item.tags.length - 2}
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-sm border-t pt-3 mb-4">
-
-                  <div className="flex justify-between">
-
-                    <span className="text-muted-foreground">
-                      Complaint ID
-                    </span>
-
-                    <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
-                      {item.complaintId}
-                    </span>
-
-                  </div>
-
-                  <div className="flex justify-between">
-
-                    <span className="text-muted-foreground">
-                      Uploaded
-                    </span>
-
-                    <span className="text-xs">
-                      {item.uploadDate}
-                    </span>
-
-                  </div>
-
-                  <div className="flex justify-between">
-
-                    <span className="text-muted-foreground">
-                      Size
-                    </span>
-
-                    <span className="text-xs font-mono">
-                      {item.size}
-                    </span>
-
-                  </div>
-
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                  >
-                    <Eye className="h-3 w-3 mr-1" />
-                    View
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    Download
-                  </Button>
-
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="text-xs h-8"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Delete
-                  </Button>
-
-                </div>
-
-              </div>
-
-            ))
-
-          ) : (
-
-            <div className="col-span-full">
-              <div className="bg-card border-2 border-dashed rounded-2xl p-12 text-center">
-                <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No evidence files match your filters</p>
-                <Button variant="outline" className="mt-4" onClick={() => { setSearch(""); setFilter("All"); setStatusFilter("All"); }}>
-                  Clear Filters
-                </Button>
-              </div>
-            </div>
-
-          )}
-
-        </div>
-
-      </div>
-
-    </div>
-  );
-
-};
-
-const EvidenceVaultLegacy = () => {
-  const { t } = useLanguage();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All");
-
-  const evidence = useMemo(() => {
-    return initialEvidence.filter((item) => {
+    const all = [...liveEvidence, ...initialEvidence];
+    return all.filter((item) => {
       const matchesSearch =
         item.title.toLowerCase().includes(search.toLowerCase()) ||
         item.complaintId.toLowerCase().includes(search.toLowerCase());
@@ -536,7 +180,7 @@ const EvidenceVaultLegacy = () => {
 
       return matchesSearch && matchesFilter;
     });
-  }, [search, filter]);
+  }, [search, filter, liveEvidence]);
 
   const getIcon = (type: EvidenceType) => {
     switch (type) {
@@ -584,7 +228,7 @@ const EvidenceVaultLegacy = () => {
 
             </div>
 
-            <Button className="h-12 px-8">
+            <Button className="h-12 px-8" onClick={() => setShowUpload(true)}>
 
               <Upload className="mr-2 h-5 w-5" />
 
@@ -711,6 +355,20 @@ evidence.map((item) => (
 
       </div>
 
+      {item.category && (
+        <div className="mt-4 flex items-center gap-2">
+          <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium px-2.5 py-1 rounded-full">
+            <Sparkles className="inline h-3 w-3 mr-1" />
+            {item.category}
+          </span>
+          {item.status === "pending" && (
+            <span className="bg-amber-100 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full">
+              Awaiting caretaker approval
+            </span>
+          )}
+        </div>
+      )}
+
     </div>
 
     <div className="mt-6 space-y-2 text-sm">
@@ -831,7 +489,94 @@ evidence.map((item) => (
 
 </div>
 
-</div>
+{/* Upload Modal */}
+{showUpload && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="bg-card border rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Upload className="h-5 w-5 text-primary" />
+          Upload Evidence
+        </h2>
+        <button onClick={() => setShowUpload(false)} className="text-muted-foreground hover:text-foreground">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">File name</label>
+          <Input
+            value={form.fileName}
+            onChange={(e) => setForm({ ...form, fileName: e.target.value })}
+            placeholder="e.g. WhatsApp Screenshot"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">File URL / Link</label>
+          <Input
+            value={form.fileUrl}
+            onChange={(e) => setForm({ ...form, fileUrl: e.target.value })}
+            placeholder="https://..."
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">File type</label>
+          <Select value={form.fileType} onValueChange={(v) => setForm({ ...form, fileType: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="IMAGE">Image</SelectItem>
+              <SelectItem value="VIDEO">Video</SelectItem>
+              <SelectItem value="AUDIO">Audio</SelectItem>
+              <SelectItem value="DOCUMENT">Document / PDF</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Complaint ID (optional)</label>
+          <Input
+            value={form.complaintId}
+            onChange={(e) => setForm({ ...form, complaintId: e.target.value })}
+            placeholder="ANW-2026-00124"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Description (helps AI categorize)</label>
+          <Textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Describe what this evidence shows..."
+            rows={3}
+          />
+        </div>
+
+        {uploadError && (
+          <p className="text-red-600 text-sm">{uploadError}</p>
+        )}
+
+        {aiResult && (
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              <p className="font-semibold text-purple-700 dark:text-purple-300">AI categorized as:</p>
+            </div>
+            <p className="text-lg font-bold capitalize">{aiResult.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {Math.round(aiResult.confidence * 100)}% confidence — a caretaker will confirm before it goes to the evidence board.
+            </p>
+          </div>
+        )}
+
+        <Button className="w-full" onClick={handleUpload} disabled={uploading}>
+          {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+          {uploading ? "Uploading..." : "Upload for review"}
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+
+    </div>
 
 );
 

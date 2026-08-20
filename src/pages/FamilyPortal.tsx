@@ -27,6 +27,10 @@ const FamilyPortal = () => {
       name: "Fraud Escalations",
       path: "/family/escalations",
     },
+    {
+      name: "Evidence Review",
+      path: "/family/evidence-review",
+    },
   ];
 
   return (

@@ -23,6 +23,18 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment
+.env
+.env.local
+.env.production
+
+# Binaries & temp files
+cloudflared.exe
+test-server.cjs
+test-server.js
+*.db
+ml/phiusiil_dataset.csv
+
 # Playwright
 /test-results/
 /playwright-report/

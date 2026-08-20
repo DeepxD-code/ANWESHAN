@@ -20,6 +20,31 @@ export function isTwilioConfigured(): boolean {
   return twilioConfigured && !!process.env.TWILIO_PHONE_NUMBER;
 }
 
+// Normalizes local phone numbers to E.164 format (Twilio requirement).
+// Indian 10-digit numbers (e.g. 9876543211) become +919876543211.
+export function toE164(phone: string): string {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return phone;
+  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+91${digits.slice(1)}`;
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
+}
+
+function buildLocationText(alert: any): { text: string; mapsLink: string } {
+  if (alert.latitude && alert.longitude) {
+    const mapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+    return {
+      text: `Live Location: ${alert.location || ""} (${alert.latitude.toFixed(5)}, ${alert.longitude.toFixed(5)})`,
+      mapsLink,
+    };
+  }
+  return {
+    text: `Location: ${alert.location || "Unknown"}`,
+    mapsLink: "",
+  };
+}
+
 export async function notifyGuardians(alert: any, guardian: any, seniorName: string, conversation?: string) {
   const tw = getClient();
   if (!tw) {
@@ -34,23 +59,26 @@ export async function notifyGuardians(alert: any, guardian: any, seniorName: str
   let smsSent = false;
   let callSent = false;
 
+  const to = toE164(guardian.phone);
+  const { text: locationText, mapsLink } = buildLocationText(alert);
+
   // Call first with a simple alert message, then send SMS after
   try {
     const twiml = `<Response>
-  <Say voice="alice">Emergency alert for ${seniorName}. Location: ${alert.location || "Unknown"}. Please check the ANWESHAN app immediately. A text message with details will follow. Thank you.</Say>
+  <Say voice="alice">Emergency alert for ${seniorName}. ${locationText}. Please check the ANWESHAN app immediately. A text message with details will follow. Thank you.</Say>
 </Response>`;
-    await tw.calls.create({ from, to: guardian.phone, twiml });
+    await tw.calls.create({ from, to, twiml });
     callSent = true;
   } catch (e: any) {
-    console.error(`Twilio call failed for ${guardian.phone}:`, e.message || e);
+    console.error(`Twilio call failed for ${to}:`, e.message || e);
   }
 
-  const msg = `ANWESHAN Alert: ${alert.type.toUpperCase()} from ${seniorName}. Location: ${alert.location || "Unknown"}. Check the app immediately.`;
+  const msg = `ANWESHAN SOS: ${alert.type.toUpperCase()} from ${seniorName}. ${locationText}${mapsLink ? " - " + mapsLink : ""}. Check the app immediately.`;
   try {
-    await tw.messages.create({ from, to: guardian.phone, body: msg });
+    await tw.messages.create({ from, to, body: msg });
     smsSent = true;
   } catch (e: any) {
-    console.error(`Twilio SMS failed for ${guardian.phone}:`, e.message || e);
+    console.error(`Twilio SMS failed for ${to}:`, e.message || e);
   }
 
   return { sms: smsSent, call: callSent };
@@ -61,16 +89,17 @@ export async function sendSosSms(phone: string, alert: any) {
   if (!tw) return false;
   const from = process.env.TWILIO_PHONE_NUMBER;
   if (!from) return false;
-  const mapsLink = alert.latitude ? `https://maps.google.com/?q=${alert.latitude},${alert.longitude}` : "";
+  const to = toE164(phone);
+  const { text: locationText, mapsLink } = buildLocationText(alert);
   try {
     await tw.messages.create({
       from,
-      to: phone,
-      body: `ANWESHAN SOS: ${alert.type} at ${alert.location || "Unknown"}${mapsLink ? " - " + mapsLink : ""}`,
+      to,
+      body: `ANWESHAN SOS: ${alert.type} at ${locationText}${mapsLink ? " - " + mapsLink : ""}`,
     });
     return true;
   } catch (e: any) {
-    console.error(`Twilio SMS to ${phone} failed:`, e.message || e);
+    console.error(`Twilio SMS to ${to} failed:`, e.message || e);
     return false;
   }
 }

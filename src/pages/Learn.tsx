@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Volume2, VolumeX, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUserProgress } from '@/contexts/UserProgressContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useTTS } from '@/hooks/useTTS';
 
 interface Question {
   id: number;
@@ -141,6 +142,7 @@ const Learn = () => {
   const { t, language } = useLanguage();
   const { addQuizResult, addBadge, hasBadge } = useUserProgress();
   const navigate = useNavigate();
+  const { speak, stop, speaking } = useTTS();
   
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -148,6 +150,8 @@ const Learn = () => {
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [quizComplete, setQuizComplete] = useState(false);
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [readingSection, setReadingSection] = useState<'scenario' | 'options' | 'feedback' | null>(null);
 
   const question = questions[currentQuestion];
   const progress = ((currentQuestion + 1) / questions.length) * 100;
@@ -171,6 +175,8 @@ const Learn = () => {
   };
 
   const handleNext = () => {
+    stop();
+    setReadingSection(null);
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setSelectedAnswer(null);
@@ -207,6 +213,29 @@ const Learn = () => {
       setQuizComplete(true);
     }
   };
+
+  // Auto-play TTS when question changes or feedback shows
+  useEffect(() => {
+    if (!autoPlay || quizComplete) return;
+    
+    const playSequence = async () => {
+      if (!showFeedback) {
+        // Play scenario
+        setReadingSection('scenario');
+        speak(getScenario(), language);
+      } else {
+        // Play feedback
+        setReadingSection('feedback');
+        speak(getFeedbackText(), language);
+      }
+    };
+    
+    playSequence();
+    
+    return () => {
+      stop();
+    };
+  }, [currentQuestion, showFeedback, autoPlay, language, speak, stop, quizComplete]);
 
   const getScenario = () => {
     if (language === 'hi') return question.scenario.hi;
@@ -327,6 +356,59 @@ const Learn = () => {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-foreground mb-2">{t('quiz.title')}</h1>
             <p className="text-muted-foreground">{t('quiz.subtitle')}</p>
+            
+            {/* TTS Controls */}
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={autoPlay}
+                  onChange={(e) => setAutoPlay(e.target.checked)}
+                  className="rounded border-input"
+                />
+                Auto-read questions
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => speak(getScenario(), language)}
+                  disabled={speaking && readingSection === 'scenario'}
+                  className="gap-1"
+                >
+                  {speaking && readingSection === 'scenario' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const optionTexts = question.options.map(getOptionText).join('. ');
+                    speak(optionTexts, language);
+                  }}
+                  disabled={speaking && readingSection === 'options'}
+                  className="gap-1"
+                >
+                  {speaking && readingSection === 'options' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={stop}
+                  disabled={!speaking}
+                  className="gap-1"
+                >
+                  <VolumeX className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Progress */}
@@ -344,9 +426,24 @@ const Learn = () => {
               {t('quiz.question')} {currentQuestion + 1}
             </div>
             
-            <p className="text-lg text-foreground mb-8 leading-relaxed">
-              {getScenario()}
-            </p>
+            <div className="relative">
+              <p className="text-lg text-foreground mb-8 leading-relaxed pr-12">
+                {getScenario()}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0"
+                onClick={() => speak(getScenario(), language)}
+                disabled={speaking && readingSection === 'scenario'}
+              >
+                {speaking && readingSection === 'scenario' ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : (
+                  <Volume2 className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
 
             <div className="space-y-3">
               {question.options.map((option, idx) => {
@@ -382,8 +479,24 @@ const Learn = () => {
                     }`}>
                       {letter}
                     </span>
-                    <span className="flex-1 pt-1">
+                    <span className="flex-1 pt-1 pr-8 relative">
                       {getOptionText(option)}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-1/2 -translate-y-1/2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speak(getOptionText(option), language);
+                        }}
+                        disabled={speaking && readingSection === 'options'}
+                      >
+                        {speaking && readingSection === 'options' ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                        ) : (
+                          <Volume2 className="h-3 w-3" />
+                        )}
+                      </Button>
                     </span>
                     {showFeedback && isCorrect && (
                       <CheckCircle className="h-6 w-6 text-success shrink-0" />
@@ -398,14 +511,27 @@ const Learn = () => {
 
             {/* Feedback */}
             {showFeedback && (
-              <div className={`mt-6 p-4 rounded-xl animate-fade-in ${
+              <div className={`mt-6 p-4 rounded-xl animate-fade-in relative ${
                 question.options[selectedAnswer!].isCorrect 
                   ? 'bg-success/10 border border-success' 
                   : 'bg-destructive/10 border border-destructive'
               }`}>
-                <p className="text-foreground">
+                <p className="text-foreground pr-10">
                   {getFeedbackText()}
                 </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-2"
+                  onClick={() => speak(getFeedbackText(), language)}
+                  disabled={speaking && readingSection === 'feedback'}
+                >
+                  {speaking && readingSection === 'feedback' ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
             )}
 

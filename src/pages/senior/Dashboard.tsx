@@ -1,9 +1,60 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { CheckCircle2, Loader2, MapPin } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import API_BASE from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 const Dashboard = () => {
   const { t } = useLanguage();
+
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [lastCheckInTime, setLastCheckInTime] = useState<string | null>(null);
+  const [checkInError, setCheckInError] = useState("");
+
+  const getLocation = (): Promise<{ lat: number | null; lon: number | null }> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve({ lat: null, lon: null });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => resolve({ lat: null, lon: null }),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    });
+  };
+
+  const doCheckIn = async () => {
+    setCheckingIn(true);
+    setCheckInError("");
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const coords = await getLocation();
+      const response = await fetch(`${API_BASE}/checkins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id || "demo-senior",
+          latitude: coords.lat,
+          longitude: coords.lon,
+          location: coords.lat ? "Device GPS Location" : "Ahmedabad, Gujarat",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setCheckInError(data.message || "Check-in failed.");
+        return;
+      }
+      setLastCheckInTime(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error(err);
+      setCheckInError("Unable to connect to server.");
+    } finally {
+      setCheckingIn(false);
+    }
+  };
 
   const quickActions = [
     {
@@ -13,7 +64,7 @@ const Dashboard = () => {
     },
     {
       title: t("senior.dashboard.evidenceVault"),
-      path: "/senior/evidence-vault",
+      path: "/senior/fraud-centre",
       color: "bg-blue-600"
     },
     {
@@ -173,6 +224,32 @@ const Dashboard = () => {
               </Link>
 
             ))}
+
+            {/* Daily Check-in Card */}
+            <button
+              onClick={doCheckIn}
+              disabled={checkingIn}
+              className="bg-primary text-primary-foreground rounded-2xl p-6 hover:scale-105 transition text-left"
+            >
+              {checkingIn ? (
+                <Loader2 className="h-6 w-6 animate-spin mb-2" />
+              ) : lastCheckInTime ? (
+                <CheckCircle2 className="h-6 w-6 mb-2 text-green-200" />
+              ) : (
+                <CheckCircle2 className="h-6 w-6 mb-2" />
+              )}
+              <h3 className="text-xl font-semibold">
+                {checkingIn ? "Checking in..." : lastCheckInTime ? "Checked In ✓" : "Daily Check-in"}
+              </h3>
+              <p className="text-sm mt-1 opacity-80">
+                {lastCheckInTime
+                  ? `Last: ${lastCheckInTime}`
+                  : "Tap to confirm you're safe"}
+              </p>
+              {checkInError && (
+                <p className="text-xs mt-2 text-red-100">{checkInError}</p>
+              )}
+            </button>
 
           </div>
 
